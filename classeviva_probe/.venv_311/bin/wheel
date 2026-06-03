@@ -1,0 +1,6 @@
+#!/Users/delli/Desktop/prova/Sito_Gpoi/classeviva_probe/.venv_311/bin/python3.11
+import sys
+from wheel._commands import main
+if __name__ == '__main__':
+    sys.argv[0] = sys.argv[0].removesuffix('.exe')
+    sys.exit(main())
