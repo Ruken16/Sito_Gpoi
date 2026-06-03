@@ -9,6 +9,11 @@
   const h = React.createElement;
 
   const PAGES = {
+    home: {
+      title: "Home",
+      kicker: "Benvenuto",
+      description: "Esplora le potenzialità del tuo nuovo assistente allo studio.",
+    },
     dashboard: {
       title: "Dashboard",
       kicker: "Oggi",
@@ -136,11 +141,11 @@
   }
 
   function routeToPage() {
-    const key = window.location.pathname.replace(/^\/+/, "").split("/")[0] || "dashboard";
+    const key = window.location.pathname.replace(/^\/+/, "").split("/")[0] || "home";
     if (key === "rendimento") {
       return "voti";
     }
-    return PAGES[key] ? key : "dashboard";
+    return PAGES[key] ? key : "home";
   }
 
   function formatDate(value, fallback = "Senza data") {
@@ -250,6 +255,244 @@
       return [];
     }
     return value.items || [];
+  }
+
+  function LandingPage({ onStart }) {
+    useEffect(() => {
+      if (window.gsap) {
+        // Cursore Custom (GSAP Enhanced)
+        const cursor = document.getElementById("custom-cursor");
+        window.addEventListener("mousemove", (e) => {
+          gsap.to(cursor, { 
+            x: e.clientX, 
+            y: e.clientY, 
+            duration: 0.2,
+            ease: "power2.out"
+          });
+        });
+
+        // Effetto ingrandimento cursore su elementi interattivi
+        const interactive = document.querySelectorAll("button, .gsap-box, .cta-huge, .highlight");
+        interactive.forEach(el => {
+          el.addEventListener("mouseenter", () => gsap.to(cursor, { scale: 2, background: "rgba(10, 228, 72, 0.3)", duration: 0.3 }));
+          el.addEventListener("mouseleave", () => gsap.to(cursor, { scale: 1, background: "rgba(255, 255, 255, 0.1)", duration: 0.3 }));
+        });
+
+        // Helper per dividere le lettere senza plugin esterni
+        const splitText = (selector) => {
+          const el = document.querySelector(selector);
+          if (!el) return;
+          const text = el.innerText;
+          el.innerHTML = text.split(" ").map(word => 
+            `<span class="word">${word.split("").map(char => `<span class="char">${char}</span>`).join("")}</span>`
+          ).join(" ");
+        };
+
+        splitText(".hero-title");
+
+        const tl = gsap.timeline();
+        
+        // WOW Hero Animation (Letter by Letter)
+        tl.from(".hero-title .char", { 
+          y: 150, 
+          rotationX: -90, 
+          stagger: 0.02, 
+          opacity: 0, 
+          duration: 1.2, 
+          ease: "expo.out" 
+        })
+        .from(".hero-pills", { opacity: 0, scale: 0.5, duration: 0.8, ease: "back.out(1.7)" }, "-=0.6");
+
+        // Floating Shapes (Smooth Parallax)
+        gsap.to(".shape-1", { 
+          y: 100, 
+          x: 50, 
+          rotation: 360,
+          duration: 20, 
+          repeat: -1, 
+          yoyo: true, 
+          ease: "none" 
+        });
+        
+        gsap.to(".shape-2", { 
+          y: -100, 
+          x: -50, 
+          rotation: -360,
+          duration: 15, 
+          repeat: -1, 
+          yoyo: true, 
+          ease: "none" 
+        });
+
+        // Horizontal Scroll with WOW factor
+        if (window.ScrollTrigger) {
+          const sections = gsap.utils.toArray(".horizontal-section");
+          gsap.to(sections, {
+            xPercent: -100 * (sections.length - 1),
+            ease: "none",
+            scrollTrigger: {
+              trigger: ".horizontal-wrap",
+              pin: true,
+              scrub: 1,
+              snap: 1 / (sections.length - 1),
+              end: () => "+=" + document.querySelector(".horizontal-content").offsetWidth
+            }
+          });
+
+          // Parallax e Reveal per il contenuto orizzontale
+          sections.forEach(s => {
+            gsap.from(s.querySelector("h2"), {
+              x: 100,
+              opacity: 0,
+              scrollTrigger: {
+                trigger: s,
+                containerAnimation: gsap.to(sections, { xPercent: -100 * (sections.length - 1), ease: "none" }),
+                start: "left center",
+                scrub: true
+              }
+            });
+          });
+        }
+      }
+    }, []);
+
+    return h("section", { className: "landing-page" }, [
+      h("div", { className: "floating-shape shape-1", style: { top: "10%", left: "5%", width: "400px", height: "400px", background: "linear-gradient(45deg, var(--purple), var(--pink))", opacity: "0.2" }, key: "s1" }),
+      h("div", { className: "floating-shape shape-2", style: { bottom: "10%", right: "5%", width: "500px", height: "500px", background: "linear-gradient(45deg, var(--blue), var(--green))", opacity: "0.2" }, key: "s2" }),
+
+      h("div", { className: "hero-section", key: "hero" }, [
+        h("div", { className: "hero-pills", key: "pills" }, [
+          h("span", { className: "label-pill pink" }, "Next-Gen"),
+          h("span", { className: "label-pill green", style: { marginLeft: "10px" } }, "Quantum Study"),
+        ]),
+        h("h1", { className: "hero-title" }, "Evolve your Learning. ZENITH."),
+      ]),
+
+      h("div", { className: "horizontal-wrap", key: "horiz" }, [
+        h("div", { className: "horizontal-content" }, [
+          h("div", { className: "horizontal-section" }, [
+            h("span", { className: "gsap-box" }, "01"),
+            h("h2", {}, "Deep Integration"),
+            h("p", {}, "L'intero ecosistema ClasseViva, rielaborato per la tua mente.")
+          ]),
+          h("div", { className: "horizontal-section" }, [
+            h("span", { className: "gsap-box", style: { background: "var(--pink)" } }, "02"),
+            h("h2", {}, "Flow State"),
+            h("p", {}, "Algoritmi che proteggono il tuo tempo e massimizzano il focus.")
+          ]),
+          h("div", { className: "horizontal-section" }, [
+            h("span", { className: "gsap-box", style: { background: "var(--green)" } }, "03"),
+            h("h2", {}, "Neural AI"),
+            h("p", {}, "Il tuo tutor personale che evolve insieme ai tuoi voti.")
+          ]),
+        ])
+      ]),
+
+      h("div", { className: "huge-cta-section", key: "cta" }, [
+        h("div", { className: "cta-huge", onClick: onStart }, "ASCEND NOW"),
+        h("button", { className: "aura-btn", onClick: onStart }, "Initialize Zenith")
+      ])
+    ]);
+  }
+
+  function OnboardingPage({ session, onComplete }) {
+    const [step, setStep] = useState(session?.onboarded ? 2 : 1);
+    const [isLogin, setIsLogin] = useState(false);
+    const [formData, setFormData] = useState({ email: "", name: "", school_level: "Superiori" });
+    const [cvData, setCvData] = useState({ username: "", password: "" });
+    const [busy, setBusy] = useState(false);
+    const [error, setError] = useState("");
+
+    async function submitUserInfo(e) {
+      e.preventDefault();
+      setBusy(true);
+      setError("");
+      try {
+        const payload = await api("/api/register", {
+          method: "POST",
+          body: JSON.stringify(isLogin ? { email: formData.email, name: "Login", school_level: "Superiori" } : formData),
+        });
+        setStep(2);
+      } catch (err) {
+        setError(err.message);
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    async function submitCvInfo(e) {
+      e.preventDefault();
+      setBusy(true);
+      setError("");
+      try {
+        const payload = await api("/api/session", {
+          method: "POST",
+          body: JSON.stringify(cvData),
+        });
+        // Forza il ricaricamento della sessione o passa i dati corretti
+        onComplete({ ...payload, authenticated: true, onboarded: true });
+      } catch (err) {
+        setError(err.message);
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    return h("section", { className: "onboarding-page" }, [
+      h("div", { className: "onboarding-card", key: "card" }, [
+        step === 1 ? h("div", { key: "step1" }, [
+          h("h2", {}, isLogin ? "Bentornato" : "Dicci chi sei"),
+          h("p", { className: "muted" }, isLogin ? "Inserisci la tua email per accedere." : "Queste informazioni ci aiutano a personalizzare la tua esperienza."),
+          h("form", { className: "form-stack", onSubmit: submitUserInfo }, [
+            !isLogin && h("label", { className: "field" }, [
+              h("span", {}, "Nome Completo"),
+              h("input", { required: true, value: formData.name, onChange: e => setFormData({ ...formData, name: e.target.value }) }),
+            ]),
+            h("label", { className: "field" }, [
+              h("span", {}, "Email"),
+              h("input", { type: "email", required: true, value: formData.email, onChange: e => setFormData({ ...formData, email: e.target.value }) }),
+            ]),
+            !isLogin && h("label", { className: "field" }, [
+              h("span", {}, "Livello Scolastico"),
+              h("select", {
+                required: true,
+                value: formData.school_level,
+                onChange: e => setFormData({ ...formData, school_level: e.target.value }),
+                className: "select-input"
+              }, [
+                h("option", { value: "Medie" }, "Medie"),
+                h("option", { value: "Superiori" }, "Superiori"),
+                h("option", { value: "Università" }, "Università"),
+              ]),
+            ]),
+            error ? h("p", { className: "notice error" }, error) : null,
+            h("button", { className: "button button-primary", type: "submit", disabled: busy }, busy ? "Verifica..." : "Avanti"),
+            h("button", { 
+              className: "button button-ghost", 
+              type: "button", 
+              onClick: () => setIsLogin(!isLogin),
+              style: { marginTop: "12px", width: "100%" }
+            }, isLogin ? "Non hai un account? Registrati" : "Hai già un account? Accedi"),
+          ]),
+        ]) : h("div", { key: "step2" }, [
+          h("h2", {}, "Connetti ClasseViva"),
+          h("p", { className: "muted" }, "Inserisci le tue credenziali per sincronizzare i dati scolastici."),
+          h("form", { className: "form-stack", onSubmit: submitCvInfo }, [
+            h("label", { className: "field" }, [
+              h("span", {}, "Username"),
+              h("input", { required: true, value: cvData.username, onChange: e => setCvData({ ...cvData, username: e.target.value }) }),
+            ]),
+            h("label", { className: "field" }, [
+              h("span", {}, "Password"),
+              h("input", { type: "password", required: true, value: cvData.password, onChange: e => setCvData({ ...cvData, password: e.target.value }) }),
+            ]),
+            error ? h("p", { className: "notice error" }, error) : null,
+            h("button", { className: "button button-primary", type: "submit", disabled: busy }, busy ? "Connessione in corso..." : "Connetti"),
+            h("button", { className: "button button-ghost", type: "button", onClick: () => setStep(1) }, "Indietro"),
+          ]),
+        ]),
+      ]),
+    ]);
   }
 
   function documentItems(pageData) {
@@ -379,9 +622,9 @@
     return h("div", { className: "app-shell" }, [
       h("aside", { className: "rail", key: "rail" }, [
         h("a", { className: "brand", href: "/dashboard", onClick: (event) => navigate(event, "dashboard"), key: "brand" }, [
-          h("span", { className: "brand-mark", key: "mark" }, "CT"),
+          h("span", { className: "brand-mark", key: "mark" }, "N"),
           h("span", { className: "brand-text", key: "text" }, [
-            h("strong", { key: "name" }, "ClasseViva Tutor"),
+            h("strong", { key: "name" }, "Nexus"),
             h("small", { key: "tag" }, "studio, voti, documenti"),
           ]),
         ]),
@@ -1166,7 +1409,7 @@
 
   function App() {
     const [pageId, setPageId] = useState(routeToPage);
-    const [session, setSession] = useState({ booting: true, authenticated: false, saved_credentials: false });
+    const [session, setSession] = useState({ booting: true, authenticated: false, onboarded: false });
     const [filters, setFilters] = useState(initialFilters);
     const [pageData, setPageData] = useState(null);
     const [loading, setLoading] = useState(false);
@@ -1189,7 +1432,7 @@
         })
         .catch((err) => {
           if (alive) {
-            setSession({ booting: false, authenticated: false });
+            setSession({ booting: false, authenticated: false, onboarded: false });
             setError(err.message);
           }
         });
@@ -1202,7 +1445,7 @@
     }, []);
 
     useEffect(() => {
-      if (!session.authenticated) {
+      if (!session.authenticated || pageId === "home") {
         return;
       }
       let alive = true;
@@ -1231,7 +1474,7 @@
     }, [session.authenticated, pageId, queryString, refreshTick]);
 
     function navigate(event, id) {
-      event.preventDefault();
+      if (event) event.preventDefault();
       if (id === pageId) {
         return;
       }
@@ -1241,8 +1484,9 @@
 
     async function logout() {
       await api("/api/session", { method: "DELETE" }).catch(() => null);
-      setSession({ booting: false, authenticated: false, saved_credentials: false });
+      setSession({ booting: false, authenticated: false, onboarded: false });
       setPageData(null);
+      navigate(null, "home");
     }
 
     async function openAction(href, label = "Dettaglio") {
@@ -1275,14 +1519,22 @@
     }
 
     if (session.booting) {
-      return h("main", { className: "boot-screen" }, [h("div", { className: "loader", key: "l" }), h("p", { key: "p" }, "Avvio ClasseViva Tutor...")]);
+      return h("main", { className: "boot-screen" }, [h("div", { className: "loader", key: "l" }), h("p", { key: "p" }, "Avvio Nexus...")]);
     }
 
+    // Se siamo in Home Page, mostriamo la Landing indipendentemente dalla sessione
+    if (pageId === "home") {
+      return h(LandingPage, { onStart: () => navigate(null, "dashboard") });
+    }
+
+    // Se non abbiamo completato l'onboarding (email/nome/scuola)
+    if (!session.onboarded) {
+      return h(OnboardingPage, { onComplete: (payload) => setSession({ booting: false, ...payload }) });
+    }
+
+    // Se siamo onboarded ma non abbiamo ancora fatto il login CV
     if (!session.authenticated) {
-      return h(LoginScreen, {
-        session,
-        onLogin: (payload) => setSession({ booting: false, ...payload }),
-      });
+      return h(OnboardingPage, { onComplete: (payload) => setSession({ booting: false, ...payload }) });
     }
 
     return h(Layout, { pageId, navigate, session, filters, setFilters, refresh: () => setRefreshTick((value) => value + 1), logout, loading }, [

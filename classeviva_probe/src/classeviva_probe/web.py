@@ -11,7 +11,7 @@ import threading
 import time
 import zipfile
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
 from http.cookies import SimpleCookie
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from importlib import resources
@@ -50,16 +50,19 @@ from .storage import (
     append_chat_message,
     create_chat_thread,
     create_task,
-    database_path,
     delete_task,
     ensure_chat_thread,
     ensure_profile,
+    get_db_config,
     init_db,
     list_chat_messages,
     list_chat_threads,
     list_tasks,
     update_profile,
     update_task,
+    create_user,
+    get_user_by_email,
+    update_user_cv_credentials,
 )
 
 
@@ -68,6 +71,7 @@ SESSION_TTL_SECONDS = 60 * 60 * 12
 
 HTML_ROUTES = {
     "/",
+    "/home",
     "/dashboard",
     "/tutor",
     "/voti",
@@ -96,8 +100,9 @@ PAGE_SCHOOL_SECTIONS: dict[str, tuple[str, ...]] = {
 
 @dataclass
 class SessionRecord:
-    username: str
-    password: str
+    user_id: int | None
+    username: str | None
+    password: str | None
     created_at: float
     last_seen: float
     profile: dict[str, Any] | None = None
@@ -108,11 +113,12 @@ class SessionStore:
         self._items: dict[str, SessionRecord] = {}
         self._lock = threading.Lock()
 
-    def create(self, *, username: str, password: str, profile: dict[str, Any] | None = None) -> str:
+    def create(self, *, user_id: int | None = None, username: str | None = None, password: str | None = None, profile: dict[str, Any] | None = None) -> str:
         token = secrets.token_urlsafe(32)
         now = time.time()
         with self._lock:
             self._items[token] = SessionRecord(
+                user_id=user_id,
                 username=username,
                 password=password,
                 created_at=now,
@@ -147,7 +153,8 @@ class ProbeWebApplication:
         self.project_root = Path.cwd()
         self.dotenv_path = (self.project_root / dotenv_path).resolve() if not Path(dotenv_path).is_absolute() else Path(dotenv_path)
         self.sessions = SessionStore()
-        self.db = Database(database_path(self.project_root))
+        db_cfg = get_db_config()
+        self.db = Database(**db_cfg)
         init_db(self.db)
 
     def asset_bytes(self, name: str) -> bytes:
@@ -252,6 +259,7 @@ def _flatten_document_items(school: dict[str, Any]) -> list[dict[str, Any]]:
 def _load_workspace(
     *,
     app: ProbeWebApplication,
+    user_id: int,
     cfg: RuntimeConfig,
     section_keys: tuple[str, ...],
     filters: dict[str, str],
@@ -266,10 +274,9 @@ def _load_workspace(
         )
     )
     info_data = bundle["info"]["data"]
-    user_key = _derive_user_key(cfg, info_data)
     display_name = _derive_display_name(info_data)
-    profile = ensure_profile(app.db, user_key=user_key, display_name=display_name)
-    tasks = list_tasks(app.db, user_key=user_key)
+    profile = ensure_profile(app.db, user_id=user_id, display_name=display_name)
+    tasks = list_tasks(app.db, user_id=user_id)
     performance = build_performance_snapshot(bundle["sections"])
     plan = build_study_plan(tasks, profile, performance)
     suggestions = build_tutor_suggestions(tasks, performance, plan, profile)
@@ -278,7 +285,7 @@ def _load_workspace(
     return {
         "bundle": bundle,
         "info_data": info_data,
-        "user_key": user_key,
+        "user_id": user_id,
         "display_name": display_name,
         "profile": profile,
         "tasks": tasks,
@@ -454,7 +461,7 @@ def _llm_system_instruction(
 def _build_chat_payload(
     *,
     app: ProbeWebApplication,
-    user_key: str,
+    user_id: int,
     display_name: str,
     profile: dict[str, Any],
     tasks: list[dict[str, Any]],
@@ -467,20 +474,20 @@ def _build_chat_payload(
     effective_name = profile.get("display_name") or display_name
     brief = build_tutor_brief(effective_name, tasks, performance, plan, profile, school)
     provider = _chat_provider_payload(app)
-    active_thread = ensure_chat_thread(app.db, user_key=user_key, thread_id=thread_id)
-    threads = list_chat_threads(app.db, user_key=user_key)
-    messages = list_chat_messages(app.db, user_key=user_key, thread_id=active_thread["id"], limit=36) if include_messages else []
+    active_thread = ensure_chat_thread(app.db, user_id=user_id, thread_id=thread_id)
+    threads = list_chat_threads(app.db, user_id=user_id)
+    messages = list_chat_messages(app.db, user_id=user_id, thread_id=active_thread["id"], limit=36) if include_messages else []
     if include_messages and not messages:
         append_chat_message(
             app.db,
-            user_key=user_key,
+            user_id=user_id,
             thread_id=active_thread["id"],
             role="assistant",
             content=_welcome_message(effective_name, brief),
             context={"topic": "welcome"},
         )
-        messages = list_chat_messages(app.db, user_key=user_key, thread_id=active_thread["id"], limit=36)
-        threads = list_chat_threads(app.db, user_key=user_key)
+        messages = list_chat_messages(app.db, user_id=user_id, thread_id=active_thread["id"], limit=36)
+        threads = list_chat_threads(app.db, user_id=user_id)
 
     last_message = messages[-1]["content"] if messages else _welcome_message(effective_name, brief)
     return {
@@ -499,12 +506,13 @@ def _build_chat_payload(
 def _build_page_payload(
     *,
     app: ProbeWebApplication,
+    user_id: int,
     cfg: RuntimeConfig,
     page_id: str,
     filters: dict[str, str],
 ) -> dict[str, Any]:
     section_keys = PAGE_SCHOOL_SECTIONS.get(page_id, PAGE_SCHOOL_SECTIONS["dashboard"])
-    workspace = _load_workspace(app=app, cfg=cfg, section_keys=section_keys, filters=filters)
+    workspace = _load_workspace(app=app, user_id=user_id, cfg=cfg, section_keys=section_keys, filters=filters)
     info_data = workspace["info_data"]
     profile = workspace["profile"]
     tasks = workspace["tasks"]
@@ -533,7 +541,7 @@ def _build_page_payload(
         payload["dashboard"] = _dashboard_cards(tasks, plan, suggestions, school)
         payload["chat"] = _build_chat_payload(
             app=app,
-            user_key=workspace["user_key"],
+            user_id=workspace["user_id"],
             display_name=workspace["display_name"],
             profile=profile,
             tasks=tasks,
@@ -545,7 +553,7 @@ def _build_page_payload(
     if page_id == "tutor":
         payload["chat"] = _build_chat_payload(
             app=app,
-            user_key=workspace["user_key"],
+            user_id=workspace["user_id"],
             display_name=workspace["display_name"],
             profile=profile,
             tasks=tasks,
@@ -772,6 +780,13 @@ def _noticeboard_empty_html(*, title: str, pub_id: int | str) -> bytes:
     )
 
 
+class ProbeJSONEncoder(json.JSONEncoder):
+    def default(self, obj: Any) -> Any:
+        if isinstance(obj, (datetime, date)):
+            return obj.isoformat()
+        return super().default(obj)
+
+
 class ProbeRequestHandler(BaseHTTPRequestHandler):
     app: ProbeWebApplication
 
@@ -802,7 +817,7 @@ class ProbeRequestHandler(BaseHTTPRequestHandler):
             return
 
     def _send_json(self, payload: dict[str, Any], *, status: int = 200, cookie_value: str | None = None, clear_cookie: bool = False) -> None:
-        body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+        body = json.dumps(payload, ensure_ascii=False, cls=ProbeJSONEncoder).encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
@@ -978,6 +993,9 @@ class ProbeRequestHandler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:
         path = self.route_path.rstrip("/") or "/"
+        if path == "/api/register":
+            self._handle_register()
+            return
         if path == "/api/session":
             self._handle_create_session()
             return
@@ -1013,33 +1031,37 @@ class ProbeRequestHandler(BaseHTTPRequestHandler):
             return
         self._send_json({"ok": False, "message": "Risorsa non trovata"}, status=404)
 
+    def _handle_register(self) -> None:
+        payload = self._read_json_body()
+        email = str(payload.get("email", "")).strip()
+        name = str(payload.get("name", "")).strip()
+        school_level = str(payload.get("school_level", "")).strip()
+
+        if not email or not name or not school_level:
+            self._send_json({"ok": False, "message": "Email, nome e livello scolastico sono obbligatori"}, status=400)
+            return
+
+        try:
+            user = get_user_by_email(self.app.db, email)
+            if not user:
+                user = create_user(self.app.db, email, name, school_level)
+
+            token = self.app.sessions.create(user_id=user["id"])
+            self._send_json({"ok": True, "user": user}, cookie_value=token)
+        except Exception as exc:
+            self._send_error(500, exc)
+
     def _handle_get_session(self) -> None:
         record = self._session_record()
-        saved = self.app.saved_config()
         if record:
             self._send_json(
                 {
                     "ok": True,
-                    "authenticated": True,
-                    "saved_credentials": bool(saved.username and saved.password),
-                    "saved_username": saved.username,
-                    "profile": record.profile or {"connesso": True, "utente": {"ident": record.username}},
+                    "authenticated": bool(record.username and record.password),
+                    "onboarded": bool(record.user_id),
+                    "user_id": record.user_id,
+                    "profile": record.profile,
                 }
-            )
-            return
-
-        restored_token, info = self._restore_from_env()
-        if restored_token and info:
-            self._send_json(
-                {
-                    "ok": True,
-                    "authenticated": True,
-                    "saved_credentials": True,
-                    "saved_username": saved.username,
-                    "profile": info,
-                    "restored_from_env": True,
-                },
-                cookie_value=restored_token,
             )
             return
 
@@ -1047,21 +1069,21 @@ class ProbeRequestHandler(BaseHTTPRequestHandler):
             {
                 "ok": True,
                 "authenticated": False,
-                "saved_credentials": bool(saved.username and saved.password),
-                "saved_username": saved.username,
+                "onboarded": False,
             }
         )
 
     def _handle_create_session(self) -> None:
+        record = self._session_record()
+        if not record or not record.user_id:
+            self._send_json({"ok": False, "message": "Devi prima completare la registrazione base"}, status=401)
+            return
+
         payload = self._read_json_body()
-        use_saved = bool(payload.get("use_saved"))
-        if use_saved:
-            cfg = self.app.saved_config()
-        else:
-            cfg = RuntimeConfig(
-                username=str(payload.get("username", "")).strip() or None,
-                password=str(payload.get("password", "")).strip() or None,
-            )
+        cfg = RuntimeConfig(
+            username=str(payload.get("username", "")).strip() or None,
+            password=str(payload.get("password", "")).strip() or None,
+        )
 
         try:
             info = asyncio.run(fetch_info(cfg))
@@ -1069,13 +1091,21 @@ class ProbeRequestHandler(BaseHTTPRequestHandler):
             self._send_error(401, exc)
             return
 
-        if bool(payload.get("save_env")) and cfg.username and cfg.password:
-            save_env_file(cfg.username, cfg.password, dotenv_path=self.app.dotenv_path)
-
-        token = self.app.sessions.create(username=cfg.username or "", password=cfg.password or "", profile=info)
-        self._send_json({"ok": True, "authenticated": True, "profile": info}, cookie_value=token)
+        update_user_cv_credentials(self.app.db, record.user_id, cfg.username or "", cfg.password or "")
+        
+        # Aggiorna il record di sessione esistente
+        record.username = cfg.username
+        record.password = cfg.password
+        record.profile = info
+        
+        self._send_json({"ok": True, "authenticated": True, "profile": info})
 
     def _handle_page(self) -> None:
+        record = self._session_record()
+        if not record or not record.user_id:
+            self._send_json({"ok": False, "message": "Non autorizzato"}, status=401)
+            return
+            
         cfg = self._require_config()
         if cfg is None:
             return
@@ -1085,12 +1115,17 @@ class ProbeRequestHandler(BaseHTTPRequestHandler):
             return
 
         try:
-            payload = _build_page_payload(app=self.app, cfg=cfg, page_id=page_id, filters=_current_filters(self.query))
+            payload = _build_page_payload(app=self.app, user_id=record.user_id, cfg=cfg, page_id=page_id, filters=_current_filters(self.query))
             self._send_json(payload)
         except Exception as exc:
             self._send_error(500, exc)
 
     def _handle_get_chat(self) -> None:
+        record = self._session_record()
+        if not record or not record.user_id:
+            self._send_json({"ok": False, "message": "Non autorizzato"}, status=401)
+            return
+            
         cfg = self._require_config()
         if cfg is None:
             return
@@ -1100,13 +1135,14 @@ class ProbeRequestHandler(BaseHTTPRequestHandler):
             thread_id = int(thread_id_value) if thread_id_value else None
             workspace = _load_workspace(
                 app=self.app,
+                user_id=record.user_id,
                 cfg=cfg,
                 section_keys=PAGE_SCHOOL_SECTIONS["tutor"],
                 filters=filters,
             )
             payload = _build_chat_payload(
                 app=self.app,
-                user_key=workspace["user_key"],
+                user_id=record.user_id,
                 display_name=workspace["display_name"],
                 profile=workspace["profile"],
                 tasks=workspace["tasks"],
@@ -1121,35 +1157,50 @@ class ProbeRequestHandler(BaseHTTPRequestHandler):
             self._send_error(500, exc)
 
     def _handle_chat_threads(self) -> None:
+        record = self._session_record()
+        if not record or not record.user_id:
+            self._send_json({"ok": False, "message": "Non autorizzato"}, status=401)
+            return
+            
         cfg = self._require_config()
         if cfg is None:
             return
         try:
-            user_key, info = self._build_user_context(cfg)
-            ensure_profile(self.app.db, user_key=user_key, display_name=_derive_display_name(info))
-            active = ensure_chat_thread(self.app.db, user_key=user_key)
-            self._send_json({"ok": True, "active_thread": active, "threads": list_chat_threads(self.app.db, user_key=user_key)})
+            display_name = _derive_display_name(record.profile or {})
+            ensure_profile(self.app.db, user_id=record.user_id, display_name=display_name)
+            active = ensure_chat_thread(self.app.db, user_id=record.user_id)
+            self._send_json({"ok": True, "active_thread": active, "threads": list_chat_threads(self.app.db, user_id=record.user_id)})
         except Exception as exc:
             self._send_error(500, exc)
 
     def _handle_chat_thread_create(self) -> None:
+        record = self._session_record()
+        if not record or not record.user_id:
+            self._send_json({"ok": False, "message": "Non autorizzato"}, status=401)
+            return
+            
         cfg = self._require_config()
         if cfg is None:
             return
         payload = self._read_json_body()
         try:
-            user_key, info = self._build_user_context(cfg)
-            ensure_profile(self.app.db, user_key=user_key, display_name=_derive_display_name(info))
+            display_name = _derive_display_name(record.profile or {})
+            ensure_profile(self.app.db, user_id=record.user_id, display_name=display_name)
             thread = create_chat_thread(
                 self.app.db,
-                user_key=user_key,
+                user_id=record.user_id,
                 title=str(payload.get("title") or "Nuova chat"),
             )
-            self._send_json({"ok": True, "thread": thread, "threads": list_chat_threads(self.app.db, user_key=user_key)}, status=201)
+            self._send_json({"ok": True, "thread": thread, "threads": list_chat_threads(self.app.db, user_id=record.user_id)}, status=201)
         except Exception as exc:
             self._send_error(500, exc)
 
     def _handle_chat_message(self) -> None:
+        record = self._session_record()
+        if not record or not record.user_id:
+            self._send_json({"ok": False, "message": "Non autorizzato"}, status=401)
+            return
+
         cfg = self._require_config()
         if cfg is None:
             return
@@ -1169,26 +1220,27 @@ class ProbeRequestHandler(BaseHTTPRequestHandler):
         try:
             workspace = _load_workspace(
                 app=self.app,
+                user_id=record.user_id,
                 cfg=cfg,
                 section_keys=PAGE_SCHOOL_SECTIONS["tutor"],
                 filters=filters,
             )
             append_chat_message(
                 self.app.db,
-                user_key=workspace["user_key"],
+                user_id=record.user_id,
                 thread_id=thread_id,
                 role="user",
                 content=message,
                 context={"filters": filters},
             )
             display_name = workspace["profile"].get("display_name") or workspace["display_name"]
-            active_thread = ensure_chat_thread(self.app.db, user_key=workspace["user_key"], thread_id=thread_id)
-            chat_messages = list_chat_messages(self.app.db, user_key=workspace["user_key"], thread_id=active_thread["id"], limit=10)
+            active_thread = ensure_chat_thread(self.app.db, user_id=record.user_id, thread_id=thread_id)
+            chat_messages = list_chat_messages(self.app.db, user_id=record.user_id, thread_id=active_thread["id"], limit=10)
             ai_config = load_ai_config(dotenv_path=self.app.dotenv_path)
             provider_mode = "local"
             if ai_config.enabled:
                 try:
-                    llm_text = gemini_generate_reply(
+                    llm_text = asyncio.run(gemini_generate_reply(
                         config=ai_config,
                         system_instruction=_llm_system_instruction(
                             display_name=display_name,
@@ -1199,7 +1251,7 @@ class ProbeRequestHandler(BaseHTTPRequestHandler):
                             school=workspace["school"],
                         ),
                         history=_chat_history_for_llm(chat_messages, limit=10),
-                    )
+                    ))
                     reply = {
                         "topic": "Tutor AI",
                         "content": llm_text,
@@ -1228,7 +1280,7 @@ class ProbeRequestHandler(BaseHTTPRequestHandler):
                 )
             append_chat_message(
                 self.app.db,
-                user_key=workspace["user_key"],
+                user_id=record.user_id,
                 thread_id=active_thread["id"],
                 role="assistant",
                 content=reply["content"],
@@ -1236,7 +1288,7 @@ class ProbeRequestHandler(BaseHTTPRequestHandler):
             )
             chat_payload = _build_chat_payload(
                 app=self.app,
-                user_key=workspace["user_key"],
+                user_id=record.user_id,
                 display_name=workspace["display_name"],
                 profile=workspace["profile"],
                 tasks=workspace["tasks"],
@@ -1251,28 +1303,38 @@ class ProbeRequestHandler(BaseHTTPRequestHandler):
             self._send_error(500, exc)
 
     def _handle_tasks_list(self) -> None:
+        record = self._session_record()
+        if not record or not record.user_id:
+            self._send_json({"ok": False, "message": "Non autorizzato"}, status=401)
+            return
+            
         cfg = self._require_config()
         if cfg is None:
             return
         try:
-            user_key, info = self._build_user_context(cfg)
-            profile = ensure_profile(self.app.db, user_key=user_key, display_name=_derive_display_name(info))
-            tasks = list_tasks(self.app.db, user_key=user_key)
+            display_name = _derive_display_name(record.profile or {})
+            profile = ensure_profile(self.app.db, user_id=record.user_id, display_name=display_name)
+            tasks = list_tasks(self.app.db, user_id=record.user_id)
             self._send_json({"ok": True, "tasks": tasks, "summary": _task_summary(tasks), "profile": profile})
         except Exception as exc:
             self._send_error(500, exc)
 
     def _handle_task_create(self) -> None:
+        record = self._session_record()
+        if not record or not record.user_id:
+            self._send_json({"ok": False, "message": "Non autorizzato"}, status=401)
+            return
+            
         cfg = self._require_config()
         if cfg is None:
             return
         payload = self._read_json_body()
         try:
-            user_key, info = self._build_user_context(cfg)
-            ensure_profile(self.app.db, user_key=user_key, display_name=_derive_display_name(info))
+            display_name = _derive_display_name(record.profile or {})
+            ensure_profile(self.app.db, user_id=record.user_id, display_name=display_name)
             task = create_task(
                 self.app.db,
-                user_key=user_key,
+                user_id=record.user_id,
                 title=str(payload.get("title", "")).strip(),
                 subject=str(payload.get("subject", "")).strip() or "Materia libera",
                 due_date=str(payload.get("due_date", "")).strip() or date.today().isoformat(),
@@ -1287,41 +1349,54 @@ class ProbeRequestHandler(BaseHTTPRequestHandler):
             self._send_error(400, exc)
 
     def _handle_task_update(self) -> None:
+        record = self._session_record()
+        if not record or not record.user_id:
+            self._send_json({"ok": False, "message": "Non autorizzato"}, status=401)
+            return
+            
         cfg = self._require_config()
         if cfg is None:
             return
         payload = self._read_json_body()
         task_id = int((self.route_path.rstrip("/") or "/").rsplit("/", 1)[-1])
         try:
-            user_key, _ = self._build_user_context(cfg)
-            task = update_task(self.app.db, user_key=user_key, task_id=task_id, fields=payload)
+            task = update_task(self.app.db, user_id=record.user_id, task_id=task_id, fields=payload)
             self._send_json({"ok": True, "task": task})
         except Exception as exc:
             self._send_error(400, exc)
 
     def _handle_task_delete(self) -> None:
+        record = self._session_record()
+        if not record or not record.user_id:
+            self._send_json({"ok": False, "message": "Non autorizzato"}, status=401)
+            return
+            
         cfg = self._require_config()
         if cfg is None:
             return
         task_id = int((self.route_path.rstrip("/") or "/").rsplit("/", 1)[-1])
         try:
-            user_key, _ = self._build_user_context(cfg)
-            delete_task(self.app.db, user_key=user_key, task_id=task_id)
+            delete_task(self.app.db, user_id=record.user_id, task_id=task_id)
             self._send_json({"ok": True})
         except Exception as exc:
             self._send_error(400, exc)
 
     def _handle_profile_update(self) -> None:
+        record = self._session_record()
+        if not record or not record.user_id:
+            self._send_json({"ok": False, "message": "Non autorizzato"}, status=401)
+            return
+            
         cfg = self._require_config()
         if cfg is None:
             return
         payload = self._read_json_body()
         try:
-            user_key, info = self._build_user_context(cfg)
-            ensure_profile(self.app.db, user_key=user_key, display_name=_derive_display_name(info))
+            display_name = _derive_display_name(record.profile or {})
+            ensure_profile(self.app.db, user_id=record.user_id, display_name=display_name)
             profile = update_profile(
                 self.app.db,
-                user_key=user_key,
+                user_id=record.user_id,
                 display_name=payload.get("display_name"),
                 study_goal=payload.get("study_goal"),
                 learning_mode=payload.get("learning_mode"),
