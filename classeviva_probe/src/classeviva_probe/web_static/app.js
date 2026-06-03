@@ -260,24 +260,6 @@
   function LandingPage({ onStart }) {
     useEffect(() => {
       if (window.gsap) {
-        // Cursore Custom (GSAP Enhanced)
-        const cursor = document.getElementById("custom-cursor");
-        window.addEventListener("mousemove", (e) => {
-          gsap.to(cursor, { 
-            x: e.clientX, 
-            y: e.clientY, 
-            duration: 0.2,
-            ease: "power2.out"
-          });
-        });
-
-        // Effetto ingrandimento cursore su elementi interattivi
-        const interactive = document.querySelectorAll("button, .gsap-box, .cta-huge, .highlight");
-        interactive.forEach(el => {
-          el.addEventListener("mouseenter", () => gsap.to(cursor, { scale: 2, background: "rgba(10, 228, 72, 0.3)", duration: 0.3 }));
-          el.addEventListener("mouseleave", () => gsap.to(cursor, { scale: 1, background: "rgba(255, 255, 255, 0.1)", duration: 0.3 }));
-        });
-
         // Helper per dividere le lettere senza plugin esterni
         const splitText = (selector) => {
           const el = document.querySelector(selector);
@@ -612,20 +594,28 @@
         h("p", { className: "muted", key: "d" }, config.description),
       ]),
       h("div", { className: "header-chip", key: "chip" }, [
-        h("span", { key: "label" }, loading ? "Sincronizzo" : "Sessione"),
-        h("strong", { key: "value" }, overview.display_name || overview.student_name || "Studente"),
+        h("span", { key: "label" }, loading ? "Synchronizing..." : "Active Zenith Profile"),
+        h("strong", { key: "value" }, overview.display_name || overview.student_name || "Zenith Scholar"),
       ]),
     ]);
   }
 
   function Layout({ children, pageId, navigate, session, filters, setFilters, refresh, logout, loading }) {
+    useEffect(() => {
+      // Animazione di entrata per il workspace
+      gsap.fromTo(".workspace", 
+        { opacity: 0, y: 20 },
+        { opacity: 1, y: 0, duration: 0.6, ease: "power3.out", clearProps: "all" }
+      );
+    }, [pageId]);
+
     return h("div", { className: "app-shell" }, [
       h("aside", { className: "rail", key: "rail" }, [
         h("a", { className: "brand", href: "/dashboard", onClick: (event) => navigate(event, "dashboard"), key: "brand" }, [
-          h("span", { className: "brand-mark", key: "mark" }, "N"),
+          h("span", { className: "brand-mark", key: "mark" }, "Z"),
           h("span", { className: "brand-text", key: "text" }, [
-            h("strong", { key: "name" }, "Nexus"),
-            h("small", { key: "tag" }, "studio, voti, documenti"),
+            h("strong", { key: "name" }, "Zenith"),
+            h("small", { key: "tag" }, "peak performance study"),
           ]),
         ]),
         h("nav", { className: "nav", "aria-label": "Navigazione", key: "nav" },
@@ -641,7 +631,7 @@
                     onClick: (event) => navigate(event, id),
                     key: id,
                   },
-                  [h(IconDot, { tone: pageId === id ? "white" : "blue", key: "dot" }), h("span", { key: "label" }, label)]
+                  [h(IconDot, { tone: pageId === id ? "green" : "white", key: "dot" }), h("span", { key: "label" }, label)]
                 )
               ),
             ])
@@ -772,37 +762,49 @@
     const planDays = pageData?.plan?.days || [];
     const firstWeak = performance.risk_subjects?.[0];
 
+    useEffect(() => {
+      // Animazioni per le card della dashboard
+      gsap.from(".metric-card, .panel", {
+        opacity: 0,
+        y: 30,
+        stagger: 0.1,
+        duration: 0.8,
+        ease: "expo.out",
+        clearProps: "all"
+      });
+    }, []);
+
     return h("div", { className: "page-grid" }, [
       h("section", { className: "hero-panel", key: "hero" }, [
         h("div", { key: "copy" }, [
-          h("p", { className: "eyebrow", key: "k" }, "Focus"),
-          h("h2", { key: "t" }, firstWeak ? `Riparti da ${firstWeak.subject}` : "Registro sotto controllo"),
+          h("p", { className: "eyebrow", key: "k" }, "Focus Analysis"),
+          h("h2", { key: "t" }, firstWeak ? `Potenzia ${firstWeak.subject}` : "Sincronizzazione Completa"),
           h(
             "p",
             { className: "muted", key: "b" },
             firstWeak
-              ? `Media ${numberText(firstWeak.average)}: il planner puo distribuire sessioni brevi nei prossimi giorni.`
-              : "Nessuna criticita evidente dai dati disponibili."
+              ? `Media ${numberText(firstWeak.average)}: Zenith consiglia sessioni di recupero mirate nei prossimi 3 giorni.`
+              : "I tuoi dati indicano un andamento ottimale in tutte le materie."
           ),
         ]),
         h("div", { className: "hero-number", key: "num" }, [
-          h("span", { key: "label" }, "Media periodo"),
+          h("span", { key: "label" }, "Average"),
           h("strong", { key: "value" }, numberText(performance.overall_average)),
         ]),
       ]),
       h("section", { className: "metric-grid", key: "metrics" }, [
-        h(MetricCard, { label: "Media attiva", value: performance.overall_average, note: performance.active_period_label, tone: "blue", key: "avg" }),
-        h(MetricCard, { label: "Tutto l'anno", value: performance.overall_all_periods, note: "Media su tutti i periodi", tone: "green", key: "all" }),
-        h(MetricCard, { label: "Assenze", value: performance.absences_count || 0, note: "Dal registro", tone: "orange", key: "abs" }),
-        h(MetricCard, { label: "Attivita aperte", value: pageData?.task_summary?.active || 0, note: "Planner personale", tone: "red", key: "tasks" }),
+        h(MetricCard, { label: "Active Average", value: performance.overall_average, note: performance.active_period_label, tone: "green", key: "avg" }),
+        h(MetricCard, { label: "Yearly Average", value: performance.overall_all_periods, note: "Overall performance", tone: "blue", key: "all" }),
+        h(MetricCard, { label: "Absences", value: performance.absences_count || 0, note: "Total recorded", tone: "orange", key: "abs" }),
+        h(MetricCard, { label: "Active Tasks", value: pageData?.task_summary?.active || 0, note: "Zenith Planner", tone: "pink", key: "tasks" }),
       ]),
       h("section", { className: "split-grid", key: "split" }, [
-        h(CompactList, { title: "Prossimi giorni", items: agendaItems, empty: "Nessuna voce agenda vicina.", openAction, key: "agenda" }),
+        h(CompactList, { title: "Upcoming Events", items: agendaItems, empty: "No upcoming events in your agenda.", openAction, key: "agenda" }),
         h(PlanPreview, { days: planDays.slice(0, 3), key: "plan" }),
       ]),
       h("section", { className: "split-grid", key: "docs" }, [
-        h(CompactList, { title: "Documenti recenti", items: documents, empty: "Nessun documento disponibile.", openAction, key: "documents" }),
-        h(CompactList, { title: "Bacheca", items: notices, empty: "Nessuna circolare disponibile.", openAction, key: "notices" }),
+        h(CompactList, { title: "Recent Files", items: documents, empty: "No recent documents found.", openAction, key: "documents" }),
+        h(CompactList, { title: "Bulletins", items: notices, empty: "No school bulletins available.", openAction, key: "notices" }),
       ]),
     ]);
   }
@@ -847,6 +849,17 @@
       setSelectedPeriod(defaultPeriod);
     }, [defaultPeriod]);
 
+    useEffect(() => {
+      gsap.from(".grade-row, .panel", {
+        opacity: 0,
+        x: -20,
+        stagger: 0.05,
+        duration: 0.6,
+        ease: "power2.out",
+        clearProps: "all"
+      });
+    }, [selectedPeriod]);
+
     const selected = selectedPeriodData(performance, selectedPeriod);
     const grades = allGrades.filter((item) => selectedPeriod === "all" || item.period_key === selectedPeriod);
     const grouped = groupBy(grades, (item) => item.subject || "Materia");
@@ -855,12 +868,12 @@
     return h("div", { className: "page-grid" }, [
       h("section", { className: "panel grades-summary", key: "summary" }, [
         h("div", { key: "copy" }, [
-          h("p", { className: "eyebrow", key: "k" }, "Periodo selezionato"),
-          h("h2", { key: "title" }, selected.label || "Periodo"),
-          h("p", { className: "muted", key: "body" }, "La media usa solo i voti che fanno media; i voti blu o annullati restano visibili ma separati."),
+          h("p", { className: "eyebrow", key: "k" }, "Selected Period"),
+          h("h2", { key: "title" }, selected.label || "Period"),
+          h("p", { className: "muted", key: "body" }, "Zenith tracks your performance across all subjects, highlighting trends and critical areas."),
         ]),
-        h("div", { className: "grade-orb", key: "orb" }, [
-          h("span", { key: "l" }, "Media"),
+        h("div", { className: "grade-orb hero-number", key: "orb" }, [
+          h("span", { key: "l" }, "Average"),
           h("strong", { key: "v" }, numberText(selected.overall_average)),
         ]),
       ]),
@@ -874,7 +887,7 @@
               key: period.key,
               type: "button",
             },
-            [h("span", { key: "l" }, period.label), h("small", { key: "c" }, `${period.count || 0} voti`)]
+            [h("span", { key: "l" }, period.label), h("small", { key: "c" }, `${period.count || 0} grades`)]
           )
         )
       ),
@@ -883,20 +896,20 @@
         h(RecentGrades, { grades: grades.slice(0, 8), key: "recent" }),
       ]),
       h("section", { className: "panel", key: "details" }, [
-        h("div", { className: "section-head", key: "head" }, [h("h2", { key: "t" }, "Voti per materia"), h("span", { key: "c" }, grades.length)]),
+        h("div", { className: "section-head", key: "head" }, [h("h2", { key: "t" }, "Subject Breakdown"), h("span", { key: "c" }, grades.length)]),
         grades.length
           ? h("div", { className: "subject-stack", key: "groups" },
               Object.entries(grouped).map(([subject, items]) =>
                 h("article", { className: "subject-panel", key: subject }, [
                   h("div", { className: "subject-head", key: "head" }, [
                     h("h3", { key: "t" }, subject),
-                    h("span", { key: "c" }, `${items.length} voti`),
+                    h("span", { key: "c" }, `${items.length} entries`),
                   ]),
                   h("div", { className: "grade-list", key: "items" }, items.map((item) => h(GradeRow, { grade: item, key: item.id }))),
                 ])
               )
             )
-          : h(EmptyState, { title: "Nessun voto in questo periodo", body: "Seleziona Tutto l'anno oppure controlla che ClasseViva abbia restituito voti per questo periodo.", key: "empty" }),
+          : h(EmptyState, { title: "No data found for this period", body: "Select a different period or check your connection.", key: "empty" }),
       ]),
     ]);
   }
@@ -947,6 +960,18 @@
   function AgendaPage({ pageData, openAction, filters, setFilters }) {
     const [viewMode, setViewMode] = useState("week");
     const [cursor, setCursor] = useState(todayIso());
+
+    useEffect(() => {
+      gsap.from(".time-card, .timeline-day", {
+        opacity: 0,
+        y: 20,
+        stagger: 0.03,
+        duration: 0.5,
+        ease: "power2.out",
+        clearProps: "all"
+      });
+    }, [cursor, viewMode]);
+
     useEffect(() => {
       if (filters.day && filters.day !== cursor) {
         setCursor(filters.day);
@@ -983,24 +1008,24 @@
     return h("div", { className: "page-grid" }, [
       h("section", { className: "panel agenda-toolbar", key: "toolbar" }, [
         h("div", { key: "copy" }, [
-          h("p", { className: "eyebrow", key: "k" }, "Calendario"),
+          h("p", { className: "eyebrow", key: "k" }, "Calendar View"),
           h("h2", { key: "title" }, viewMode === "month" ? formatLongDate(firstDay) : `${formatDate(firstDay)} - ${formatDate(days[days.length - 1])}`),
-          h("p", { className: "muted", key: "body" }, `Vista aggiornata dal ${formatDate(filters.start)} al ${formatDate(filters.end)}.`),
+          h("p", { className: "muted", key: "body" }, `Zenith analysis from ${formatDate(filters.start)} to ${formatDate(filters.end)}.`),
         ]),
         h("div", { className: "calendar-actions", key: "actions" }, [
-          h(Button, { tone: "ghost", onClick: () => move(-1), key: "prev" }, viewMode === "month" ? "Mese prima" : "Settimana prima"),
-          h(Button, { tone: "secondary", onClick: () => applyWindow(todayIso()), key: "today" }, "Oggi"),
-          h(Button, { tone: "ghost", onClick: () => move(1), key: "next" }, viewMode === "month" ? "Mese dopo" : "Settimana dopo"),
+          h(Button, { tone: "ghost", onClick: () => move(-1), key: "prev" }, viewMode === "month" ? "Previous Month" : "Previous Week"),
+          h(Button, { tone: "primary", onClick: () => applyWindow(todayIso()), key: "today" }, "Today"),
+          h(Button, { tone: "ghost", onClick: () => move(1), key: "next" }, viewMode === "month" ? "Next Month" : "Next Week"),
           h("div", { className: "segmented", key: "segmented" }, [
-            h("button", { type: "button", className: classNames(viewMode === "week" && "is-active"), onClick: () => switchMode("week"), key: "week" }, "Settimana"),
-            h("button", { type: "button", className: classNames(viewMode === "month" && "is-active"), onClick: () => switchMode("month"), key: "month" }, "Mese"),
+            h("button", { type: "button", className: classNames("button", viewMode === "week" && "is-active"), onClick: () => switchMode("week"), key: "week" }, "Week"),
+            h("button", { type: "button", className: classNames("button", viewMode === "month" && "is-active"), onClick: () => switchMode("month"), key: "month" }, "Month"),
           ]),
         ]),
       ]),
       h("section", { className: "panel agenda-timeline-panel", key: "strip" }, [
         h("div", { className: "section-head", key: "head" }, [
-          h("h2", { key: "t" }, "Timeline"),
-          h("span", { key: "c" }, `${visibleCount} eventi nel periodo`),
+          h("h2", { key: "t" }, "Zenith Timeline"),
+          h("span", { key: "c" }, `${visibleCount} events`),
         ]),
         h("div", { className: "time-rail", key: "grid" },
           days.map((day) => {
@@ -1015,16 +1040,16 @@
               entries.length
                 ? h("div", { className: "time-items", key: "items" },
                     entries.slice(0, 5).map((item) =>
-                      h("button", { type: "button", onClick: () => openAction(item.actions?.[0]?.href, item.title), key: item.id || item.title }, item.title || "Evento")
+                      h("button", { type: "button", onClick: () => openAction(item.actions?.[0]?.href, item.title), key: item.id || item.title }, item.title || "Event")
                     )
                   )
-                : h("p", { className: "muted", key: "empty" }, "Libero"),
+                : h("p", { className: "muted", key: "empty" }, "Free day"),
             ]);
           })
         ),
       ]),
       h("section", { className: "panel", key: "timeline" }, [
-        h("div", { className: "section-head", key: "head" }, [h("h2", { key: "t" }, "Dettaglio agenda"), h("span", { key: "c" }, "giorno per giorno")]),
+        h("div", { className: "section-head", key: "head" }, [h("h2", { key: "t" }, "Detailed Schedule"), h("span", { key: "c" }, "day by day")]),
         h("div", { className: "timeline", key: "list" },
           days.map((day) =>
             h("section", { className: "timeline-day", key: day }, [
@@ -1032,7 +1057,7 @@
               h("div", { className: "list-stack", key: "items" },
                 (groups[day] || []).length
                   ? groups[day].map((item) => h(ItemRow, { item, openAction, key: item.id || item.title }))
-                  : [h("p", { className: "muted empty-day", key: "empty" }, "Nessun evento per questo giorno.")]
+                  : [h("p", { className: "muted empty-day", key: "empty" }, "No scheduled activities for this day.")]
               ),
             ])
           )
@@ -1421,6 +1446,42 @@
       const query = new URLSearchParams(filters);
       return query.toString();
     }, [filters]);
+
+    useEffect(() => {
+      // Global Cursor Logic
+      if (window.gsap) {
+        const cursor = document.getElementById("custom-cursor");
+        const onMouseMove = (e) => {
+          gsap.to(cursor, { 
+            x: e.clientX, 
+            y: e.clientY, 
+            duration: 0.2,
+            ease: "power2.out"
+          });
+        };
+        window.addEventListener("mousemove", onMouseMove);
+
+        const onMouseEnter = () => gsap.to(cursor, { scale: 2, background: "rgba(10, 228, 72, 0.3)", duration: 0.3 });
+        const onMouseLeave = () => gsap.to(cursor, { scale: 1, background: "rgba(255, 255, 255, 0.1)", duration: 0.3 });
+
+        const updateInteractive = () => {
+          const interactive = document.querySelectorAll("button, a, .cta-huge, .highlight, input, select, textarea");
+          interactive.forEach(el => {
+            el.addEventListener("mouseenter", onMouseEnter);
+            el.addEventListener("mouseleave", onMouseLeave);
+          });
+        };
+
+        updateInteractive();
+        const observer = new MutationObserver(updateInteractive);
+        observer.observe(document.body, { childList: true, subtree: true });
+
+        return () => {
+          window.removeEventListener("mousemove", onMouseMove);
+          observer.disconnect();
+        };
+      }
+    }, []);
 
     useEffect(() => {
       let alive = true;
