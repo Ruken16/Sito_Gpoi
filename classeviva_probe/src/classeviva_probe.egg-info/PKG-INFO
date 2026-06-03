@@ -1,0 +1,99 @@
+Metadata-Version: 2.4
+Name: classeviva-probe
+Version: 0.2.0
+Summary: Mini progetto CLI + GUI per verificare rapidamente se Classeviva.py funziona con il tuo account
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+Requires-Dist: Classeviva.py>=1.2.10
+Requires-Dist: python-dotenv>=1.0.1
+
+# ClasseViva Probe
+
+Mini progetto Python per capire velocemente se `Classeviva.py` funziona davvero sul tuo ambiente.
+
+## Cosa fa
+
+Questo progetto adesso espone sia una CLI sia una GUI desktop (`tkinter`):
+
+- `cv-probe`: CLI per fare test mirati e vedere JSON grezzo
+- `cv-probe-gui`: interfaccia grafica Windows-friendly per esplorare i dati
+
+## Dati visibili dalla GUI
+
+Pulsanti standard:
+
+- info sessione / utente
+- documenti
+- assenze
+- voti
+- note
+- agenda
+- bacheca
+- calendario
+- carta
+- didattica
+- libri
+- materie
+- periodi
+
+Pulsanti con data / intervallo:
+
+- lezioni del giorno
+- assenze per intervallo
+- agenda per intervallo
+- calendario per intervallo
+- lezioni per intervallo
+- panoramica per intervallo
+
+## Requisiti
+
+- Python 3.10+
+- credenziali ClasseViva valide
+
+## Setup su Windows PowerShell
+
+```powershell
+py -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -e .
+Copy-Item .env.example .env
+notepad .env
+```
+
+Nel file `.env` inserisci:
+
+```env
+CV_USERNAME=il_tuo_username
+CV_PASSWORD=la_tua_password
+```
+
+## Avvio GUI
+
+```powershell
+python -m classeviva_probe.gui
+```
+
+oppure:
+
+```powershell
+cv-probe-gui
+```
+
+## Avvio CLI
+
+```powershell
+python -m classeviva_probe.cli smoke
+python -m classeviva_probe.cli info
+python -m classeviva_probe.cli assenze
+python -m classeviva_probe.cli voti
+python -m classeviva_probe.cli note
+python -m classeviva_probe.cli lezioni-giorno --date 2026-04-10
+python -m classeviva_probe.cli assenze-da-a --start 2026-02-01 --end 2026-04-10
+```
+
+## Note importanti
+
+- La GUI salva le credenziali in `.env` con il pulsante **Salva .env**.
+- Il pulsante **Carica tutto** prova a interrogare tutti gli endpoint principali e raccoglie gli errori endpoint per endpoint.
+- Alcuni account restituiscono errore su `lezioni_giorno` / endpoint lezioni (`invalid student-id`): la GUI mostra l'errore ma continua a funzionare per gli altri dati.
+- L'output è volutamente lasciato in JSON, così puoi vedere la risposta reale dell'API senza filtri.

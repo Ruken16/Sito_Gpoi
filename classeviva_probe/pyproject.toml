@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "classeviva-probe"
+version = "0.5.0"
+description = "Tutor digitale web per organizzare lo studio usando dati scolastici, planner automatico e dashboard rendimento"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "Classeviva.py>=1.2.10",
+  "python-dotenv>=1.0.1",
+]
+
+[project.scripts]
+cv-probe = "classeviva_probe.cli:main"
+cv-probe-gui = "classeviva_probe.gui:main"
+cv-probe-web = "classeviva_probe.web:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+classeviva_probe = ["web_static/*.html", "web_static/*.css", "web_static/*.js"]

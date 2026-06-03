@@ -1,0 +1,3 @@
+[console_scripts]
+cv-probe = classeviva_probe.cli:main
+cv-probe-gui = classeviva_probe.gui:main
