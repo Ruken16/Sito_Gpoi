@@ -671,9 +671,31 @@ def build_tutor_reply(
         else:
             blocks.append("In questa sessione non ho ricevuto voci agenda leggibili. Se aggiorni il periodo della pagina Agenda, posso ragionare sui compiti vicini.")
 
-    if any(token in lower for token in ("voto", "media", "rendimento", "materia", "recuper", "miglior")):
+    if any(token in lower for token in ("voto", "media", "rendimento", "materia", "recuper", "miglior", "pagella", "arrot")):
         topic = "Rendimento scolastico"
-        if mentioned_subject:
+        all_averages = performance.get("subject_averages", [])
+        should_round = any(token in lower for token in ("arrot", "intero", "mezzi voti", "senza decimali"))
+        
+        # Se chiede esplicitamente di "tutte" le materie o "pagella" o se sta chiedendo di arrotondare tutto
+        if any(token in lower for token in ("tutte", "ogni", "pagella", "materia per materia", "elenco", "arrot")):
+            if all_averages:
+                lines = [
+                    "Ecco la tua situazione attuale materia per materia (proiezione pagella):" if not should_round 
+                    else "Ecco la proiezione dei tuoi voti in pagella (arrotondati all'intero):"
+                ]
+                for item in all_averages:
+                    avg = item["average"]
+                    if should_round:
+                        display_avg = int(round(avg))
+                    else:
+                        display_avg = avg
+                    status = "✅" if (avg >= 6 if not should_round else display_avg >= 6) else "⚠️"
+                    lines.append(f"{status} {item['subject']}: {display_avg}")
+                blocks.append("\n".join(lines))
+                chips.append(f"{len(all_averages)} materie")
+            else:
+                blocks.append("Non ho ancora dati sufficienti per farti un elenco completo dei voti.")
+        elif mentioned_subject:
             blocks.append(
                 f"Per {mentioned_subject['subject']} la media attuale è {mentioned_subject['average']} su {mentioned_subject['count']} voti. "
                 "Ti conviene fare sessioni brevi ma frequenti, alternate a una materia più sicura, così abbassi il carico cognitivo."
@@ -729,6 +751,13 @@ def build_tutor_reply(
             f"Il quadro che puoi condividere in modo semplice è questo: {summary['active']} attività aperte, "
             f"media {performance.get('overall_average') or 'n/d'} e {summary['overdue']} attività in ritardo. "
             "La parte più utile da mostrare è il piano della settimana, perché rende visibile il metodo senza essere invasivo."
+        )
+
+    if any(token in lower for token in ("non hai risposto", "non mi rispondi", "rispondi alla domanda", "cosa ti ho chiesto")):
+        topic = "Chiarimento"
+        blocks.append(
+            "Scusami se non sono stato preciso. Sto cercando di analizzare i tuoi dati per darti la risposta migliore. "
+            "Se ti riferivi a voti, compiti o al piano di studio, prova a chiedermelo specificando la materia o il periodo, così posso essere più diretto."
         )
 
     if not blocks:

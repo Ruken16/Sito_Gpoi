@@ -417,6 +417,7 @@ def _llm_system_instruction(
     return "\n".join(
         [
             "Sei un tutor scolastico digitale che risponde in italiano in modo concreto, amichevole e sintetico.",
+            "Rispondi SEMPRE in modo diretto alla domanda dell'utente prima di proporre analisi o consigli.",
             "Devi basarti solo sul contesto fornito. Se un'informazione non è presente, dichiaralo chiaramente.",
             "Evita frasi vaghe e proponi passi operativi, sostenibili e personalizzati.",
             f"Studente: {display_name}",
@@ -1665,14 +1666,22 @@ def build_parser() -> argparse.ArgumentParser:
 def run_server(host: str, port: int, *, dotenv_path: str = ".env") -> None:
     app = ProbeWebApplication(dotenv_path=dotenv_path)
     ProbeRequestHandler.app = app
-    server = ThreadingHTTPServer((host, port), ProbeRequestHandler)
-    print(f"ClasseViva Probe Web disponibile su http://{host}:{port}")
+    ThreadingHTTPServer.allow_reuse_address = True
     try:
+        server = ThreadingHTTPServer((host, port), ProbeRequestHandler)
+        print(f"ClasseViva Probe Web disponibile su http://{host}:{port}")
         server.serve_forever()
+    except OSError as e:
+        if e.errno == 48:
+            print(f"ERRORE: La porta {port} è già occupata.")
+            print(f"Esegui questo comando per liberarla: lsof -ti:{port} | xargs kill -9")
+        else:
+            raise e
     except KeyboardInterrupt:
         pass
     finally:
-        server.server_close()
+        if 'server' in locals():
+            server.server_close()
 
 
 def main() -> None:
